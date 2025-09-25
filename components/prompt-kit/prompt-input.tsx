@@ -67,7 +67,6 @@ function PromptInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleChange = (newValue: string) => {
-    console.log('PromptInput handleChange:', newValue)
     onValueChange?.(newValue)
   }
 
@@ -135,7 +134,6 @@ function PromptInputTextarea({
       ref={textareaRef}
       value={value}
       onChange={(e) => {
-        console.log('Textarea onChange:', e.target.value)
         setValue(e.target.value)
       }}
       onKeyDown={handleKeyDown}
