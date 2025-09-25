@@ -40,7 +40,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useRef, useState } from "react";
-import { TextDotsLoader } from "@/components/prompt-kit/loader";
+import { TypingLoader } from "@/components/prompt-kit/loader";
+import { SourceLinks } from "@/components/ui/source-links";
+import { ToolUsage } from "@/components/ui/tool-usage";
 // import { CodeBlock, CodeBlockCode } from "@/components/prompt-kit/code-block";
 
 // Initial conversation history
@@ -171,6 +173,50 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
   const costInfo = response.messages.find(m => m.type === 'agent_cost')
   const error = response.messages.find(m => m.type === 'error')?.content
 
+  // Extract source URLs from tool responses
+  const extractSourceUrls = (): string[] => {
+    const urls: string[] = []
+    
+    // Debug logging (can be removed in production)
+    // console.log('All SDK messages:', response.messages)
+    // console.log('Tool results:', toolResults)
+    
+    // Look for URLs in tool results  
+    toolResults.forEach(result => {
+      // The SDK returns tool response content as a JSON string, not an object
+      if (result.content) {
+        try {
+          // console.log('Tool response content:', result.content)
+          const parsedContent = JSON.parse(result.content)
+          // console.log('Parsed tool content:', parsedContent)
+          
+          // Handle web tool responses
+          if (parsedContent.tool === 'web' && parsedContent.response) {
+            if (Array.isArray(parsedContent.response)) {
+              parsedContent.response.forEach((item: unknown) => {
+                const urlItem = item as { url?: string }
+                if (urlItem.url && typeof urlItem.url === 'string') {
+                  urls.push(urlItem.url)
+                }
+              })
+            }
+          }
+        } catch (parseError) {
+          // console.log('Failed to parse tool response:', parseError)
+          // Fallback: extract URLs with regex from the string
+          const urlRegex = /https?:\/\/[^\s)]+/g
+          const foundUrls = result.content.match(urlRegex) || []
+          urls.push(...foundUrls)
+        }
+      }
+    })
+
+    return urls
+  }
+
+  const sourceUrls = extractSourceUrls()
+  // console.log('Extracted source URLs:', sourceUrls)
+
   return (
     <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
       {/* Session info */}
@@ -189,22 +235,7 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
       )}
       
       {/* Tool usage */}
-      {toolUse.length > 0 && (
-        <div className="text-sm text-muted-foreground mb-2">
-          {toolUse.map((tool, i) => (
-            <div key={i}>🔧 Tool: {tool.tool_name}</div>
-          ))}
-        </div>
-      )}
-      
-      {/* Tool results */}
-      {toolResults.length > 0 && (
-        <div className="text-sm text-muted-foreground mb-2">
-          {toolResults.map((result, i) => (
-            <div key={i}>📋 Result: {JSON.stringify(result.tool_output)}</div>
-          ))}
-        </div>
-      )}
+      <ToolUsage toolUse={toolUse} />
       
       {/* Main response */}
       {content && (
@@ -215,9 +246,10 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
       
       {/* Show loading indicator if streaming and no content yet */}
       {!response.isComplete && !content && (
-        <MessageContent className="text-muted-foreground bg-transparent p-0">
-          <TextDotsLoader text="Agent is responding" />
-        </MessageContent>
+        <div className="flex items-center gap-2 py-2">
+          <TypingLoader size="sm" className="text-muted-foreground" />
+          <span className="text-sm text-muted-foreground font-medium">Generating response...</span>
+        </div>
       )}
       
       {/* Cost info */}
@@ -233,16 +265,26 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
           ⚠️ {error}
         </div>
       )}
+
+      {/* Source Links */}
+      <SourceLinks urls={sourceUrls} />
     </Message>
   );
 };
 
-// Loading component
+// Enhanced loading component with typing animation
 const LoadingMessage = () => (
-  <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-6">
-    <div className="group flex w-full flex-col gap-0">
-      <div className="text-foreground prose w-full min-w-0 flex-1 rounded-lg bg-transparent p-0">
-        <TextDotsLoader text="Agent is responding" />
+  <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
+    <div className="flex flex-col gap-2">
+      {/* Typing indicator */}
+      <div className="flex items-center gap-2">
+        <TypingLoader size="sm" className="text-muted-foreground" />
+        <span className="text-sm text-muted-foreground font-medium">Agent is thinking...</span>
+      </div>
+      
+      {/* Optional: Show what the agent might be doing */}
+      <div className="text-xs text-muted-foreground/70">
+        Analyzing your question and searching for information
       </div>
     </div>
   </Message>
@@ -344,7 +386,7 @@ function ChatContent() {
       console.log('Frontend received:', sdkResponses);
       
       // Extract session ID from the first agent_started response
-      const sessionResponse = sdkResponses.find((r: any) => r.type === 'agent_started');
+      const sessionResponse = sdkResponses.find((r: SDKResponse) => r.type === 'agent_started');
       if (sessionResponse?.session) {
         setSessionId(sessionResponse.session);
       }
