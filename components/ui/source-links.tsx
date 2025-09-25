@@ -34,7 +34,7 @@ function SourceLink({ url, index }: { url: string; index: number }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs rounded-full transition-colors border border-gray-200"
+      className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs rounded-full transition-colors border border-gray-200"
     >
       {!faviconFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -68,7 +68,7 @@ export function SourceLinks({ urls }: SourceLinksProps) {
   }
 
   return (
-    <div className="flex flex-wrap gap-1 mt-3">
+    <div className="flex flex-wrap gap-2 mt-6">
       {uniqueUrls.map((url, i) => (
         <SourceLink key={i} url={url} index={i} />
       ))}

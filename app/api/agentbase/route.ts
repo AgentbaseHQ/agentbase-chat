@@ -1,29 +1,30 @@
+/**
+ * Agentbase API Route
+ * 
+ * This API endpoint integrates with the Agentbase SDK to power AI chat functionality.
+ * Template originally created by Agentbase - https://agentbase.sh
+ * 
+ * Learn more: https://docs.agentbase.sh
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
+import Agentbase from 'agentbase-sdk'
 
-// Dynamic import of agentbase-sdk to avoid build issues
-async function createAgentbaseClient() {
-  try {
-    console.log('Attempting to import Agentbase SDK...')
-    // Import from the abapi directory where the SDK is installed
-    const { default: Agentbase } = await import('../../../abapi/node_modules/agentbase-sdk')
-    console.log('SDK imported successfully')
-    
-    const apiKey = process.env.NEXT_PUBLIC_AGENTBASE_API_KEY || process.env.AGENTBASE_API_KEY
-    console.log('API key found:', !!apiKey)
-    if (!apiKey) {
-      throw new Error('AGENTBASE_API_KEY not found in environment variables')
-    }
-
-    console.log('Creating Agentbase client...')
-    const client = new Agentbase({
-      apiKey: apiKey,
-    })
-    console.log('Agentbase client created successfully')
-    return client
-  } catch (error) {
-    console.error('Failed to create Agentbase client:', error)
-    throw error
+// Create agentbase client
+function createAgentbaseClient() {
+  const apiKey = process.env.NEXT_PUBLIC_AGENTBASE_API_KEY || process.env.AGENTBASE_API_KEY
+  console.log('API key found:', !!apiKey)
+  
+  if (!apiKey) {
+    throw new Error('AGENTBASE_API_KEY not found in environment variables')
   }
+
+  console.log('Creating Agentbase client...')
+  const client = new Agentbase({
+    apiKey: apiKey,
+  })
+  console.log('Agentbase client created successfully')
+  return client
 }
 
 
@@ -41,11 +42,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let agentbase: any
+    let agentbase: Agentbase
 
     try {
-      agentbase = await createAgentbaseClient()
+      agentbase = createAgentbaseClient()
     } catch (error) {
       console.error('Failed to create Agentbase client:', error)
       return NextResponse.json({ error: 'Agentbase SDK not available' }, { status: 500 })

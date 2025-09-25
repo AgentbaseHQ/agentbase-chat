@@ -1,3 +1,17 @@
+/**
+ * Agentbase Chat Application - Main Component
+ * 
+ * This chat interface demonstrates the power of Agentbase AI agents.
+ * Template originally created by Agentbase - https://agentbase.sh
+ * 
+ * Features:
+ * - Real-time AI chat with tool usage
+ * - Source link integration  
+ * - Cost tracking and session management
+ * 
+ * Powered by Agentbase SDK: https://docs.agentbase.sh
+ */
+
 "use client";
 
 import {
@@ -44,91 +58,38 @@ import { TypingLoader } from "@/components/prompt-kit/loader";
 import { SourceLinks } from "@/components/ui/source-links";
 import { ToolUsage } from "@/components/ui/tool-usage";
 
-// Initial conversation history
-const conversationHistory = [
+// Conversation history structure (empty by default)
+const conversationHistory: ConversationGroup[] = [
   {
     period: "Today",
-    conversations: [
-      {
-        id: "t1",
-        title: "Project roadmap discussion",
-        lastMessage:
-          "Let's prioritize the authentication features for the next sprint.",
-        timestamp: new Date().setHours(new Date().getHours() - 2),
-      },
-      {
-        id: "t2",
-        title: "API Documentation Review",
-        lastMessage:
-          "The endpoint descriptions need more detail about rate limiting.",
-        timestamp: new Date().setHours(new Date().getHours() - 5),
-      },
-      {
-        id: "t3",
-        title: "Frontend Bug Analysis",
-        lastMessage:
-          "I found the issue - we need to handle the null state in the user profile component.",
-        timestamp: new Date().setHours(new Date().getHours() - 8),
-      },
-    ],
+    conversations: [],
   },
   {
     period: "Yesterday",
-    conversations: [
-      {
-        id: "y1",
-        title: "Database Schema Design",
-        lastMessage:
-          "Let's add indexes to improve query performance on these tables.",
-        timestamp: new Date().setDate(new Date().getDate() - 1),
-      },
-      {
-        id: "y2",
-        title: "Performance Optimization",
-        lastMessage:
-          "The lazy loading implementation reduced initial load time by 40%.",
-        timestamp: new Date().setDate(new Date().getDate() - 1),
-      },
-    ],
+    conversations: [],
   },
   {
     period: "Last 7 days",
-    conversations: [
-      {
-        id: "w1",
-        title: "Authentication Flow",
-        lastMessage: "We should implement the OAuth2 flow with refresh tokens.",
-        timestamp: new Date().setDate(new Date().getDate() - 3),
-      },
-      {
-        id: "w2",
-        title: "Component Library",
-        lastMessage:
-          "These new UI components follow the design system guidelines perfectly.",
-        timestamp: new Date().setDate(new Date().getDate() - 5),
-      },
-      {
-        id: "w3",
-        title: "UI/UX Feedback",
-        lastMessage:
-          "The navigation redesign received positive feedback from the test group.",
-        timestamp: new Date().setDate(new Date().getDate() - 6),
-      },
-    ],
+    conversations: [],
   },
   {
     period: "Last month",
-    conversations: [
-      {
-        id: "m1",
-        title: "Initial Project Setup",
-        lastMessage:
-          "All the development environments are now configured consistently.",
-        timestamp: new Date().setDate(new Date().getDate() - 15),
-      },
-    ],
+    conversations: [],
   },
 ];
+
+// Conversation structure for sidebar
+interface Conversation {
+  id: string
+  title: string
+  lastMessage: string
+  timestamp: number
+}
+
+interface ConversationGroup {
+  period: string
+  conversations: Conversation[]
+}
 
 // Simple types that work with SDK responses
 interface ChatMessage {
@@ -219,7 +180,7 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
       
       {/* Thinking process */}
       {thinking.length > 0 && (
-        <div className="text-sm text-muted-foreground mb-2">
+        <div className="text-sm text-muted-foreground mb-4">
           🧠 {thinking.join(" → ")}
           {!response.isComplete && "..."}
         </div>
@@ -245,14 +206,14 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
       
       {/* Cost info */}
       {costInfo && (
-        <div className="text-xs text-muted-foreground mt-2">
+        <div className="text-xs text-muted-foreground mt-4">
           💰 Cost: ${typeof costInfo.cost === 'number' ? costInfo.cost.toFixed(4) : costInfo.cost} | Balance: ${typeof costInfo.balance === 'number' ? costInfo.balance.toFixed(2) : costInfo.balance}
         </div>
       )}
       
       {/* Error */}
       {error && (
-        <div className="text-sm text-red-600 mt-1">
+        <div className="text-sm text-red-600 mt-4">
           ⚠️ {error}
         </div>
       )}
@@ -285,12 +246,22 @@ function ChatSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="flex flex-row items-center justify-between gap-2 px-2 py-4">
-        <div className="flex flex-row items-center gap-2 px-2">
-          <div className="bg-primary/10 size-8 rounded-md"></div>
+        <a 
+          href="https://agentbase.sh" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex flex-row items-center gap-2 px-2 hover:opacity-80 transition-opacity"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src="https://www.agentbase.sh/logos/agentbase.svg" 
+            alt="Agentbase" 
+            className="size-8" 
+          />
           <div className="text-md font-base text-primary tracking-tight">
-            zola.chat
+            Agentbase
           </div>
-        </div>
+        </a>
         <Button variant="ghost" className="size-8">
           <Search className="size-4" />
         </Button>
@@ -309,11 +280,17 @@ function ChatSidebar() {
           <SidebarGroup key={group.period}>
             <SidebarGroupLabel>{group.period}</SidebarGroupLabel>
             <SidebarMenu>
-              {group.conversations.map((conversation) => (
-                <SidebarMenuButton key={conversation.id}>
-                  <span>{conversation.title}</span>
-                </SidebarMenuButton>
-              ))}
+              {group.conversations.length === 0 ? (
+                <div className="px-2 py-1 text-sm text-muted-foreground">
+                  No conversations yet
+                </div>
+              ) : (
+                group.conversations.map((conversation) => (
+                  <SidebarMenuButton key={conversation.id}>
+                    <span>{conversation.title}</span>
+                  </SidebarMenuButton>
+                ))
+              )}
             </SidebarMenu>
           </SidebarGroup>
         ))}
@@ -402,9 +379,22 @@ function ChatContent() {
 
   return (
     <main className="flex h-screen flex-col overflow-hidden">
-      <header className="bg-background z-10 flex h-16 w-full shrink-0 items-center gap-2 border-b px-4">
+      <header className="bg-background z-10 flex h-16 w-full shrink-0 items-center gap-3 border-b px-4">
         <SidebarTrigger className="-ml-1" />
-        <div className="text-foreground">Agentbase Chat</div>
+        <a 
+          href="https://agentbase.sh" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src="https://www.agentbase.sh/logos/agentbase.svg" 
+            alt="Agentbase" 
+            className="w-6 h-6" 
+          />
+          <div className="text-foreground font-medium">Agentbase</div>
+        </a>
       </header>
 
       <div ref={chatContainerRef} className="relative flex-1 overflow-y-auto">

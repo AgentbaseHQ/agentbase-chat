@@ -1,3 +1,12 @@
+/**
+ * Agentbase Chat Application
+ * 
+ * This is an open-source Next.js chat template powered by Agentbase AI agents.
+ * Original template created by Agentbase - https://agentbase.sh
+ * 
+ * Learn more about Agentbase SDK: https://docs.agentbase.sh
+ */
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
@@ -15,8 +24,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agentbase SDK Chat App Template",
-  description: "A Next.js chat application showcasing the Agentbase SDK for AI agent integration",
+  title: "Agentbase Chat",
+  description: "A Next.js chat application powered by Agentbase AI agents",
   icons: {
     icon: "https://www.agentbase.sh/logos/agentbase.svg",
   },
