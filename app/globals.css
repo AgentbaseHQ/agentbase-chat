@@ -137,4 +137,16 @@
       transform: translateY(0);
     }
   }
+
+  /* Typing loader animation for 3 dots */
+  @keyframes typing {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-10px);
+      opacity: 1;
+    }
+  }
 }

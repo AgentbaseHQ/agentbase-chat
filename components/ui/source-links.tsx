@@ -20,7 +20,7 @@ function getFaviconUrl(url: string): string {
     const domain = new URL(url).origin
     return `${domain}/favicon.ico`
   } catch {
-    return '/favicon.ico' // fallback
+    return '/next.svg' // fallback to existing public asset
   }
 }
 
@@ -49,6 +49,7 @@ export function SourceLinks({ urls }: SourceLinksProps) {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-full transition-colors border border-slate-200"
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={getFaviconUrl(url)}
             alt=""

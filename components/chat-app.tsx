@@ -43,7 +43,6 @@ import { useRef, useState } from "react";
 import { TypingLoader } from "@/components/prompt-kit/loader";
 import { SourceLinks } from "@/components/ui/source-links";
 import { ToolUsage } from "@/components/ui/tool-usage";
-// import { CodeBlock, CodeBlockCode } from "@/components/prompt-kit/code-block";
 
 // Initial conversation history
 const conversationHistory = [
@@ -177,18 +176,12 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
   const extractSourceUrls = (): string[] => {
     const urls: string[] = []
     
-    // Debug logging (can be removed in production)
-    // console.log('All SDK messages:', response.messages)
-    // console.log('Tool results:', toolResults)
-    
     // Look for URLs in tool results  
     toolResults.forEach(result => {
       // The SDK returns tool response content as a JSON string, not an object
       if (result.content) {
         try {
-          // console.log('Tool response content:', result.content)
           const parsedContent = JSON.parse(result.content)
-          // console.log('Parsed tool content:', parsedContent)
           
           // Handle web tool responses
           if (parsedContent.tool === 'web' && parsedContent.response) {
@@ -201,8 +194,7 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
               })
             }
           }
-        } catch (parseError) {
-          // console.log('Failed to parse tool response:', parseError)
+        } catch {
           // Fallback: extract URLs with regex from the string
           const urlRegex = /https?:\/\/[^\s)]+/g
           const foundUrls = result.content.match(urlRegex) || []
@@ -215,7 +207,6 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
   }
 
   const sourceUrls = extractSourceUrls()
-  // console.log('Extracted source URLs:', sourceUrls)
 
   return (
     <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
@@ -290,9 +281,6 @@ const LoadingMessage = () => (
   </Message>
 )
 
-// Initial chat messages - keeping original for backward compatibility
-// const initialMessages = [];
-
 function ChatSidebar() {
   return (
     <Sidebar>
@@ -338,12 +326,12 @@ function ChatContent() {
   const [prompt, setPrompt] = useState("");
   
   const handlePromptChange = (value: string) => {
-    console.log('Parent setPrompt called with:', value);
     setPrompt(value);
   };
   const [isLoading, setIsLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [agentResponse, setAgentResponse] = useState<AgentResponse | null>(null);
+  const [completedResponses, setCompletedResponses] = useState<AgentResponse[]>([]);
+  const [currentAgentResponse, setCurrentAgentResponse] = useState<AgentResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -362,7 +350,7 @@ function ChatContent() {
     setPrompt("");
     setIsLoading(true);
     setError(null);
-    setAgentResponse(null);
+    setCurrentAgentResponse(null);
 
     try {
       // Simple fetch to our API route
@@ -383,7 +371,6 @@ function ChatContent() {
 
       // Get complete response from SDK (no streaming)
       const sdkResponses = await response.json();
-      console.log('Frontend received:', sdkResponses);
       
       // Extract session ID from the first agent_started response
       const sessionResponse = sdkResponses.find((r: SDKResponse) => r.type === 'agent_started');
@@ -392,12 +379,15 @@ function ChatContent() {
       }
 
       // Create agent response with all SDK responses
-      setAgentResponse({
+      const completedResponse: AgentResponse = {
         id: `agent-${Date.now()}`,
         messages: Array.isArray(sdkResponses) ? sdkResponses : [sdkResponses],
         isComplete: true,
         timestamp: new Date(),
-      });
+      };
+
+      // Add to completed responses history
+      setCompletedResponses(prev => [...prev, completedResponse]);
 
       // Auto-scroll
       if (chatContainerRef.current) {
@@ -421,7 +411,7 @@ function ChatContent() {
         <ChatContainerRoot className="h-full">
           <ChatContainerContent className="space-y-4 px-5 py-12">
             {/* Show initial prompt if no messages */}
-            {chatMessages.length === 0 && !agentResponse && (
+            {chatMessages.length === 0 && completedResponses.length === 0 && !currentAgentResponse && (
               <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 md:px-5 md:pb-5">
                 <div className="text-foreground mb-2 font-medium">
                   Try asking:
@@ -434,36 +424,46 @@ function ChatContent() {
               </div>
             )}
 
-            {/* Render user messages */}
-            {chatMessages.map((message) => (
-              <Message
-                key={message.id}
-                className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-6"
-              >
-                <div className="group flex w-full flex-col items-end gap-1">
-                  <MessageContent className="bg-muted text-primary max-w-[85%] rounded-3xl px-5 py-2.5 whitespace-pre-wrap sm:max-w-[75%]">
-                    {message.content}
-                  </MessageContent>
-                  <MessageActions className="flex gap-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                    <MessageAction tooltip="Copy" delayDuration={100}>
-                      <Button variant="ghost" size="icon" className="rounded-full">
-                        <Copy />
-                      </Button>
-                    </MessageAction>
-                  </MessageActions>
-                </div>
-              </Message>
+            {/* Render conversation history (user messages + completed agent responses) */}
+            {chatMessages.map((message, index) => (
+              <div key={`conversation-${index}`}>
+                {/* User message */}
+                <Message
+                  key={message.id}
+                  className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-6"
+                >
+                  <div className="group flex w-full flex-col items-end gap-1">
+                    <MessageContent className="bg-muted text-primary max-w-[85%] rounded-3xl px-5 py-2.5 whitespace-pre-wrap sm:max-w-[75%]">
+                      {message.content}
+                    </MessageContent>
+                    <MessageActions className="flex gap-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <MessageAction tooltip="Copy" delayDuration={100}>
+                        <Button variant="ghost" size="icon" className="rounded-full">
+                          <Copy />
+                        </Button>
+                      </MessageAction>
+                    </MessageActions>
+                  </div>
+                </Message>
+
+                {/* Corresponding agent response (if exists) */}
+                {completedResponses[index] && (
+                  <div className="animate-fade-in">
+                    <AgentMessageComponent response={completedResponses[index]} />
+                  </div>
+                )}
+              </div>
             ))}
 
-            {/* Render agent response */}
-            {agentResponse && (
+            {/* Render current streaming agent response */}
+            {currentAgentResponse && (
               <div className="animate-fade-in">
-                <AgentMessageComponent response={agentResponse} />
+                <AgentMessageComponent response={currentAgentResponse} />
               </div>
             )}
 
             {/* Show loading when waiting for stream */}
-            {isLoading && !agentResponse && <LoadingMessage />}
+            {isLoading && !currentAgentResponse && <LoadingMessage />}
             
             {/* Show error message */}
             {error && (
@@ -505,10 +505,7 @@ function ChatContent() {
                   size="icon"
                   className="h-8 w-8 rounded-full"
                   disabled={!prompt.trim() || isLoading}
-                  onClick={() => {
-                    console.log('Button clicked! Prompt:', prompt);
-                    handleSubmit();
-                  }}
+                  onClick={handleSubmit}
                 >
                   {isLoading ? (
                     <Square className="size-5 fill-current" />
