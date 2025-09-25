@@ -129,18 +129,17 @@ const conversationHistory = [
   },
 ];
 
-// Types for Agentbase API responses
-type AgentbaseResponseType = 
-  | "agent_started"
-  | "agent_thinking" 
-  | "agent_tool_use"
-  | "agent_tool_response"
-  | "agent_response"
-  | "agent_cost"
-  | "error"
+// Simple types that work with SDK responses
+interface ChatMessage {
+  id: string
+  type: "user" | "agent" | "system"
+  content: string
+  timestamp: Date
+}
 
-interface AgentbaseResponse {
-  type: AgentbaseResponseType
+// SDK response shape (from Agentbase)
+interface SDKResponse {
+  type: string
   content?: string
   session?: string
   cost?: number
@@ -152,92 +151,86 @@ interface AgentbaseResponse {
   error?: string
 }
 
-interface ChatMessage {
-  id: string
-  type: "user" | "agent" | "system"
-  content: string
-  timestamp: Date
-}
-
+// Use SDK response directly - much simpler!
 interface AgentResponse {
   id: string
-  type: "agent"
-  sessionInfo: string
-  thinking: string[]
-  toolUse: string[]
-  toolResults: string[]
-  response: string[]
-  cost?: { cost: number | string; balance: number | string }
-  error?: string
+  messages: SDKResponse[] // SDK response objects
+  isComplete: boolean
   timestamp: Date
-  isStreaming: boolean
 }
 
 
-// Single agent message component that shows accumulated response
+// Simplified agent message component using SDK responses directly
 const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
+  // Extract different message types from SDK responses
+  const sessionInfo = response.messages.find(m => m.type === 'agent_started')?.session
+  const thinking = response.messages.filter(m => m.type === 'agent_thinking').map(m => m.content)
+  const toolUse = response.messages.filter(m => m.type === 'agent_tool_use')
+  const toolResults = response.messages.filter(m => m.type === 'agent_tool_response')
+  const content = response.messages.filter(m => m.type === 'agent_response').map(m => m.content).join('\n')
+  const costInfo = response.messages.find(m => m.type === 'agent_cost')
+  const error = response.messages.find(m => m.type === 'error')?.content
+
   return (
     <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
       {/* Session info */}
-      {response.sessionInfo && (
+      {sessionInfo && (
         <div className="text-xs text-muted-foreground mb-1">
-          🔗 {response.sessionInfo}
+          🔗 Session: {sessionInfo}
         </div>
       )}
       
       {/* Thinking process */}
-      {response.thinking.length > 0 && (
+      {thinking.length > 0 && (
         <div className="text-sm text-muted-foreground mb-2">
-          🧠 {response.thinking.join(" → ")}
-          {response.isStreaming && response.thinking.length > 0 && "..."}
+          🧠 {thinking.join(" → ")}
+          {!response.isComplete && "..."}
         </div>
       )}
       
       {/* Tool usage */}
-      {response.toolUse.length > 0 && (
+      {toolUse.length > 0 && (
         <div className="text-sm text-muted-foreground mb-2">
-          {response.toolUse.map((tool, i) => (
-            <div key={i}>🔧 Tool: {tool}</div>
+          {toolUse.map((tool, i) => (
+            <div key={i}>🔧 Tool: {tool.tool_name}</div>
           ))}
         </div>
       )}
       
       {/* Tool results */}
-      {response.toolResults.length > 0 && (
+      {toolResults.length > 0 && (
         <div className="text-sm text-muted-foreground mb-2">
-          {response.toolResults.map((result, i) => (
-            <div key={i}>📋 Result: {result}</div>
+          {toolResults.map((result, i) => (
+            <div key={i}>📋 Result: {JSON.stringify(result.tool_output)}</div>
           ))}
         </div>
       )}
       
       {/* Main response */}
-      {response.response.length > 0 && (
-        <MessageContent className="whitespace-pre-wrap">
-          {response.response.join("\n")}
-          {response.isStreaming && "▋"}
+      {content && (
+        <MessageContent markdown className="bg-transparent p-0">
+          {content + (!response.isComplete ? "▋" : "")}
         </MessageContent>
       )}
       
-      {/* Show loading indicator if streaming and no response yet */}
-      {response.isStreaming && response.response.length === 0 && (
-        <MessageContent className="text-muted-foreground">
+      {/* Show loading indicator if streaming and no content yet */}
+      {!response.isComplete && !content && (
+        <MessageContent className="text-muted-foreground bg-transparent p-0">
           <TextDotsLoader text="Agent is responding" />
         </MessageContent>
       )}
       
       {/* Cost info */}
-      {response.cost && (
+      {costInfo && (
         <div className="text-xs text-muted-foreground mt-2">
-          💰 Cost: ${typeof response.cost.cost === "string" ? response.cost.cost : response.cost.cost.toFixed(4)} | 
-          Balance: ${typeof response.cost.balance === "string" ? response.cost.balance : response.cost.balance.toFixed(2)}
+          💰 Cost: ${typeof costInfo.cost === 'number' ? costInfo.cost.toFixed(4) : costInfo.cost} | Balance: ${typeof costInfo.balance === 'number' ? costInfo.balance.toFixed(2) : costInfo.balance}
         </div>
       )}
       
       {/* Error */}
-      {response.error && (
+      {error && (
         <div className="text-sm text-red-600 mt-1">
-          ⚠️ {response.error}
+          ⚠️ {error}
         </div>
       )}
     </Message>
@@ -312,31 +305,6 @@ function ChatContent() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  
-  // Buffer for handling incomplete SSE chunks
-  const sseBufferRef = useRef<string>("");
-
-  // Agentbase API client function
-  const callAgentbaseAPI = async (message: string, session?: string) => {
-    const response = await fetch('/api/agentbase', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message,
-        ...(session && { session }),
-        mode: 'fast',
-        streaming: true,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return response.body;
-  };
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isLoading) return;
@@ -355,179 +323,48 @@ function ChatContent() {
     setAgentResponse(null);
 
     try {
-      const stream = await callAgentbaseAPI(userMessage.content, sessionId || undefined);
-      
-      if (!stream) {
-        throw new Error('No response stream received');
+      // Simple fetch to our API route
+      const response = await fetch('/api/agentbase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage.content,
+          ...(sessionId && { session: sessionId }),
+          mode: 'fast',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
+      // Get complete response from SDK (no streaming)
+      const sdkResponses = await response.json();
+      console.log('Frontend received:', sdkResponses);
+      
+      // Extract session ID from the first agent_started response
+      const sessionResponse = sdkResponses.find((r: any) => r.type === 'agent_started');
+      if (sessionResponse?.session) {
+        setSessionId(sessionResponse.session);
+      }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-        
-        // Append new chunk to buffer
-        const chunk = decoder.decode(value, { stream: true });
-        sseBufferRef.current += chunk;
-        
-        // Process complete lines from buffer
-        const lines = sseBufferRef.current.split('\n');
-        
-        // Keep the last incomplete line in buffer
-        sseBufferRef.current = lines.pop() || "";
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data: AgentbaseResponse = JSON.parse(line.slice(6));
-              
-              // Handle session ID from agent_started
-              if (data.type === 'agent_started' && data.session) {
-                setSessionId(data.session);
-              }
-              
-              // Update agent response with new stream data
-              setAgentResponse(prev => {
-                if (!prev) {
-                  // Create new agent response
-                  const newResponse: AgentResponse = {
-                    id: `agent-${Date.now()}`,
-                    type: "agent",
-                    sessionInfo: "",
-                    thinking: [],
-                    toolUse: [],
-                    toolResults: [],
-                    response: [],
-                    timestamp: new Date(),
-                    isStreaming: true
-                  };
-                  
-                  // Add first event
-                  switch (data.type) {
-                    case 'agent_started':
-                      newResponse.sessionInfo = data.session ? `Session: ${data.session}` : "Session started";
-                      break;
-                    case 'agent_thinking':
-                      newResponse.thinking.push(data.content || "");
-                      break;
-                    case 'agent_tool_use':
-                      newResponse.toolUse.push(data.content || "");
-                      break;
-                    case 'agent_tool_response':
-                      newResponse.toolResults.push(data.content || "");
-                      break;
-                    case 'agent_response':
-                      newResponse.response.push(data.content || "");
-                      break;
-                    case 'agent_cost':
-                      if (typeof data.cost !== "undefined" && typeof data.balance !== "undefined") {
-                        newResponse.cost = { cost: data.cost, balance: data.balance };
-                      }
-                      break;
-                    case 'error':
-                      newResponse.error = data.content || "An error occurred";
-                      break;
-                  }
-                  
-                  return newResponse;
-                } else {
-                  // Update existing response
-                  const updated = { ...prev };
-                  
-                  switch (data.type) {
-                    case 'agent_started':
-                      updated.sessionInfo = data.session ? `Session: ${data.session}` : "Session started";
-                      break;
-                    case 'agent_thinking':
-                      updated.thinking.push(data.content || "");
-                      break;
-                    case 'agent_tool_use':
-                      updated.toolUse.push(data.content || "");
-                      break;
-                    case 'agent_tool_response':
-                      updated.toolResults.push(data.content || "");
-                      break;
-                    case 'agent_response':
-                      updated.response.push(data.content || "");
-                      break;
-                    case 'agent_cost':
-                      if (typeof data.cost !== "undefined" && typeof data.balance !== "undefined") {
-                        updated.cost = { cost: data.cost, balance: data.balance };
-                      }
-                      break;
-                    case 'error':
-                      updated.error = data.content || "An error occurred";
-                      break;
-                  }
-                  
-                  return updated;
-                }
-              });
-              
-              // Auto-scroll to bottom
-              if (chatContainerRef.current) {
-                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-              }
-            } catch (parseError) {
-              console.error('Failed to parse stream data:', parseError, 'Line:', line);
-            }
-          }
-        }
+      // Create agent response with all SDK responses
+      setAgentResponse({
+        id: `agent-${Date.now()}`,
+        messages: Array.isArray(sdkResponses) ? sdkResponses : [sdkResponses],
+        isComplete: true,
+        timestamp: new Date(),
+      });
+
+      // Auto-scroll
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
       }
-      
-      // Process any remaining data in buffer
-      if (sseBufferRef.current.trim() && sseBufferRef.current.startsWith('data: ')) {
-        try {
-          const data: AgentbaseResponse = JSON.parse(sseBufferRef.current.slice(6));
-          
-          setAgentResponse(prev => {
-            if (!prev) return null;
-            
-            const updated = { ...prev };
-            switch (data.type) {
-              case 'agent_started':
-                updated.sessionInfo = data.session ? `Session: ${data.session}` : "Session started";
-                break;
-              case 'agent_thinking':
-                updated.thinking.push(data.content || "");
-                break;
-              case 'agent_tool_use':
-                updated.toolUse.push(data.content || "");
-                break;
-              case 'agent_tool_response':
-                updated.toolResults.push(data.content || "");
-                break;
-              case 'agent_response':
-                updated.response.push(data.content || "");
-                break;
-              case 'agent_cost':
-                if (typeof data.cost !== "undefined" && typeof data.balance !== "undefined") {
-                  updated.cost = { cost: data.cost, balance: data.balance };
-                }
-                break;
-              case 'error':
-                updated.error = data.content || "An error occurred";
-                break;
-            }
-            return updated;
-          });
-        } catch (parseError) {
-          console.error('Failed to parse final stream data:', parseError);
-        }
-      }
-      
-      // Clear buffer
-      sseBufferRef.current = "";
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
-      
-      // Mark agent response as complete
-      setAgentResponse(prev => prev ? { ...prev, isStreaming: false } : null);
     }
   };
 
