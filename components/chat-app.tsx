@@ -30,22 +30,18 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+// import { cn } from "@/lib/utils";
 import {
   ArrowUp,
   Copy,
-  Globe,
-  Mic,
-  MoreHorizontal,
-  Pencil,
-  Plus,
   PlusIcon,
   Search,
-  ThumbsDown,
-  ThumbsUp,
-  Trash,
+  Square,
+  AlertTriangle,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { TextDotsLoader } from "@/components/prompt-kit/loader";
+// import { CodeBlock, CodeBlockCode } from "@/components/prompt-kit/code-block";
 
 // Initial conversation history
 const conversationHistory = [
@@ -133,31 +129,134 @@ const conversationHistory = [
   },
 ];
 
-// Initial chat messages
-const initialMessages = [
-  {
-    id: 1,
-    role: "user",
-    content: "Hello! Can you help me with a coding question?",
-  },
-  {
-    id: 2,
-    role: "assistant",
-    content:
-      "Of course! I'd be happy to help with your coding question. What would you like to know?",
-  },
-  {
-    id: 3,
-    role: "user",
-    content: "How do I create a responsive layout with CSS Grid?",
-  },
-  {
-    id: 4,
-    role: "assistant",
-    content:
-      "Creating a responsive layout with CSS Grid is straightforward. Here's a basic example:\n\n```css\n.container {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n  gap: 1rem;\n}\n```\n\nThis creates a grid where:\n- Columns automatically fit as many as possible\n- Each column is at least 250px wide\n- Columns expand to fill available space\n- There's a 1rem gap between items\n\nWould you like me to explain more about how this works?",
-  },
-];
+// Types for Agentbase API responses
+type AgentbaseResponseType = 
+  | "agent_started"
+  | "agent_thinking" 
+  | "agent_tool_use"
+  | "agent_tool_response"
+  | "agent_response"
+  | "agent_cost"
+  | "error"
+
+interface AgentbaseResponse {
+  type: AgentbaseResponseType
+  content?: string
+  session?: string
+  cost?: number
+  balance?: number
+  tool_name?: string
+  tool_input?: Record<string, unknown>
+  tool_output?: Record<string, unknown>
+  tool_call_id?: string
+  error?: string
+}
+
+interface ChatMessage {
+  id: string
+  type: "user" | "agent" | "system"
+  content: string
+  timestamp: Date
+}
+
+interface AgentResponse {
+  id: string
+  type: "agent"
+  sessionInfo: string
+  thinking: string[]
+  toolUse: string[]
+  toolResults: string[]
+  response: string[]
+  cost?: { cost: number | string; balance: number | string }
+  error?: string
+  timestamp: Date
+  isStreaming: boolean
+}
+
+
+// Single agent message component that shows accumulated response
+const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
+  return (
+    <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
+      {/* Session info */}
+      {response.sessionInfo && (
+        <div className="text-xs text-muted-foreground mb-1">
+          🔗 {response.sessionInfo}
+        </div>
+      )}
+      
+      {/* Thinking process */}
+      {response.thinking.length > 0 && (
+        <div className="text-sm text-muted-foreground mb-2">
+          🧠 {response.thinking.join(" → ")}
+          {response.isStreaming && response.thinking.length > 0 && "..."}
+        </div>
+      )}
+      
+      {/* Tool usage */}
+      {response.toolUse.length > 0 && (
+        <div className="text-sm text-muted-foreground mb-2">
+          {response.toolUse.map((tool, i) => (
+            <div key={i}>🔧 Tool: {tool}</div>
+          ))}
+        </div>
+      )}
+      
+      {/* Tool results */}
+      {response.toolResults.length > 0 && (
+        <div className="text-sm text-muted-foreground mb-2">
+          {response.toolResults.map((result, i) => (
+            <div key={i}>📋 Result: {result}</div>
+          ))}
+        </div>
+      )}
+      
+      {/* Main response */}
+      {response.response.length > 0 && (
+        <MessageContent className="whitespace-pre-wrap">
+          {response.response.join("\n")}
+          {response.isStreaming && "▋"}
+        </MessageContent>
+      )}
+      
+      {/* Show loading indicator if streaming and no response yet */}
+      {response.isStreaming && response.response.length === 0 && (
+        <MessageContent className="text-muted-foreground">
+          <TextDotsLoader text="Agent is responding" />
+        </MessageContent>
+      )}
+      
+      {/* Cost info */}
+      {response.cost && (
+        <div className="text-xs text-muted-foreground mt-2">
+          💰 Cost: ${typeof response.cost.cost === "string" ? response.cost.cost : response.cost.cost.toFixed(4)} | 
+          Balance: ${typeof response.cost.balance === "string" ? response.cost.balance : response.cost.balance.toFixed(2)}
+        </div>
+      )}
+      
+      {/* Error */}
+      {response.error && (
+        <div className="text-sm text-red-600 mt-1">
+          ⚠️ {response.error}
+        </div>
+      )}
+    </Message>
+  );
+};
+
+// Loading component
+const LoadingMessage = () => (
+  <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-6">
+    <div className="group flex w-full flex-col gap-0">
+      <div className="text-foreground prose w-full min-w-0 flex-1 rounded-lg bg-transparent p-0">
+        <TextDotsLoader text="Agent is responding" />
+      </div>
+    </div>
+  </Message>
+)
+
+// Initial chat messages - keeping original for backward compatibility
+// const initialMessages = [];
 
 function ChatSidebar() {
   return (
@@ -202,146 +301,302 @@ function ChatSidebar() {
 
 function ChatContent() {
   const [prompt, setPrompt] = useState("");
+  
+  const handlePromptChange = (value: string) => {
+    console.log('Parent setPrompt called with:', value);
+    setPrompt(value);
+  };
   const [isLoading, setIsLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState(initialMessages);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [agentResponse, setAgentResponse] = useState<AgentResponse | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Buffer for handling incomplete SSE chunks
+  const sseBufferRef = useRef<string>("");
 
-  const handleSubmit = () => {
-    if (!prompt.trim()) return;
+  // Agentbase API client function
+  const callAgentbaseAPI = async (message: string, session?: string) => {
+    const response = await fetch('/api/agentbase', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message,
+        ...(session && { session }),
+        mode: 'fast',
+        streaming: true,
+      }),
+    });
 
-    setPrompt("");
-    setIsLoading(true);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-    // Add user message immediately
-    const newUserMessage = {
-      id: chatMessages.length + 1,
-      role: "user",
+    return response.body;
+  };
+
+  const handleSubmit = async () => {
+    if (!prompt.trim() || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      type: "user",
       content: prompt.trim(),
+      timestamp: new Date(),
     };
 
-    setChatMessages([...chatMessages, newUserMessage]);
+    setChatMessages(prev => [...prev, userMessage]);
+    setPrompt("");
+    setIsLoading(true);
+    setError(null);
+    setAgentResponse(null);
 
-    // Simulate API response
-    setTimeout(() => {
-      const assistantResponse = {
-        id: chatMessages.length + 2,
-        role: "assistant",
-        content: `This is a response to: "${prompt.trim()}"`,
-      };
+    try {
+      const stream = await callAgentbaseAPI(userMessage.content, sessionId || undefined);
+      
+      if (!stream) {
+        throw new Error('No response stream received');
+      }
 
-      setChatMessages((prev) => [...prev, assistantResponse]);
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        // Append new chunk to buffer
+        const chunk = decoder.decode(value, { stream: true });
+        sseBufferRef.current += chunk;
+        
+        // Process complete lines from buffer
+        const lines = sseBufferRef.current.split('\n');
+        
+        // Keep the last incomplete line in buffer
+        sseBufferRef.current = lines.pop() || "";
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data: AgentbaseResponse = JSON.parse(line.slice(6));
+              
+              // Handle session ID from agent_started
+              if (data.type === 'agent_started' && data.session) {
+                setSessionId(data.session);
+              }
+              
+              // Update agent response with new stream data
+              setAgentResponse(prev => {
+                if (!prev) {
+                  // Create new agent response
+                  const newResponse: AgentResponse = {
+                    id: `agent-${Date.now()}`,
+                    type: "agent",
+                    sessionInfo: "",
+                    thinking: [],
+                    toolUse: [],
+                    toolResults: [],
+                    response: [],
+                    timestamp: new Date(),
+                    isStreaming: true
+                  };
+                  
+                  // Add first event
+                  switch (data.type) {
+                    case 'agent_started':
+                      newResponse.sessionInfo = data.session ? `Session: ${data.session}` : "Session started";
+                      break;
+                    case 'agent_thinking':
+                      newResponse.thinking.push(data.content || "");
+                      break;
+                    case 'agent_tool_use':
+                      newResponse.toolUse.push(data.content || "");
+                      break;
+                    case 'agent_tool_response':
+                      newResponse.toolResults.push(data.content || "");
+                      break;
+                    case 'agent_response':
+                      newResponse.response.push(data.content || "");
+                      break;
+                    case 'agent_cost':
+                      if (typeof data.cost !== "undefined" && typeof data.balance !== "undefined") {
+                        newResponse.cost = { cost: data.cost, balance: data.balance };
+                      }
+                      break;
+                    case 'error':
+                      newResponse.error = data.content || "An error occurred";
+                      break;
+                  }
+                  
+                  return newResponse;
+                } else {
+                  // Update existing response
+                  const updated = { ...prev };
+                  
+                  switch (data.type) {
+                    case 'agent_started':
+                      updated.sessionInfo = data.session ? `Session: ${data.session}` : "Session started";
+                      break;
+                    case 'agent_thinking':
+                      updated.thinking.push(data.content || "");
+                      break;
+                    case 'agent_tool_use':
+                      updated.toolUse.push(data.content || "");
+                      break;
+                    case 'agent_tool_response':
+                      updated.toolResults.push(data.content || "");
+                      break;
+                    case 'agent_response':
+                      updated.response.push(data.content || "");
+                      break;
+                    case 'agent_cost':
+                      if (typeof data.cost !== "undefined" && typeof data.balance !== "undefined") {
+                        updated.cost = { cost: data.cost, balance: data.balance };
+                      }
+                      break;
+                    case 'error':
+                      updated.error = data.content || "An error occurred";
+                      break;
+                  }
+                  
+                  return updated;
+                }
+              });
+              
+              // Auto-scroll to bottom
+              if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+              }
+            } catch (parseError) {
+              console.error('Failed to parse stream data:', parseError, 'Line:', line);
+            }
+          }
+        }
+      }
+      
+      // Process any remaining data in buffer
+      if (sseBufferRef.current.trim() && sseBufferRef.current.startsWith('data: ')) {
+        try {
+          const data: AgentbaseResponse = JSON.parse(sseBufferRef.current.slice(6));
+          
+          setAgentResponse(prev => {
+            if (!prev) return null;
+            
+            const updated = { ...prev };
+            switch (data.type) {
+              case 'agent_started':
+                updated.sessionInfo = data.session ? `Session: ${data.session}` : "Session started";
+                break;
+              case 'agent_thinking':
+                updated.thinking.push(data.content || "");
+                break;
+              case 'agent_tool_use':
+                updated.toolUse.push(data.content || "");
+                break;
+              case 'agent_tool_response':
+                updated.toolResults.push(data.content || "");
+                break;
+              case 'agent_response':
+                updated.response.push(data.content || "");
+                break;
+              case 'agent_cost':
+                if (typeof data.cost !== "undefined" && typeof data.balance !== "undefined") {
+                  updated.cost = { cost: data.cost, balance: data.balance };
+                }
+                break;
+              case 'error':
+                updated.error = data.content || "An error occurred";
+                break;
+            }
+            return updated;
+          });
+        } catch (parseError) {
+          console.error('Failed to parse final stream data:', parseError);
+        }
+      }
+      
+      // Clear buffer
+      sseBufferRef.current = "";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
       setIsLoading(false);
-    }, 1500);
+      
+      // Mark agent response as complete
+      setAgentResponse(prev => prev ? { ...prev, isStreaming: false } : null);
+    }
   };
 
   return (
     <main className="flex h-screen flex-col overflow-hidden">
       <header className="bg-background z-10 flex h-16 w-full shrink-0 items-center gap-2 border-b px-4">
         <SidebarTrigger className="-ml-1" />
-        <div className="text-foreground">Project roadmap discussion</div>
+        <div className="text-foreground">Agentbase Chat</div>
       </header>
 
       <div ref={chatContainerRef} className="relative flex-1 overflow-y-auto">
         <ChatContainerRoot className="h-full">
-          <ChatContainerContent className="space-y-0 px-5 py-12">
-            {chatMessages.map((message, index) => {
-              const isAssistant = message.role === "assistant";
-              const isLastMessage = index === chatMessages.length - 1;
+          <ChatContainerContent className="space-y-4 px-5 py-12">
+            {/* Show initial prompt if no messages */}
+            {chatMessages.length === 0 && !agentResponse && (
+              <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 md:px-5 md:pb-5">
+                <div className="text-foreground mb-2 font-medium">
+                  Try asking:
+                </div>
+                <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                  <li>What can you help me with?</li>
+                  <li>Explain React components</li>
+                  <li>Help me debug this code</li>
+                </ul>
+              </div>
+            )}
 
-              return (
-                <Message
-                  key={message.id}
-                  className={cn(
-                    "mx-auto flex w-full max-w-3xl flex-col gap-2 px-6",
-                    isAssistant ? "items-start" : "items-end"
-                  )}
-                >
-                  {isAssistant ? (
-                    <div className="group flex w-full flex-col gap-0">
-                      <MessageContent
-                        className="text-foreground prose flex-1 rounded-lg bg-transparent p-0"
-                        markdown
-                      >
-                        {message.content}
-                      </MessageContent>
-                      <MessageActions
-                        className={cn(
-                          "-ml-2.5 flex gap-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100",
-                          isLastMessage && "opacity-100"
-                        )}
-                      >
-                        <MessageAction tooltip="Copy" delayDuration={100}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                          >
-                            <Copy />
-                          </Button>
-                        </MessageAction>
-                        <MessageAction tooltip="Upvote" delayDuration={100}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                          >
-                            <ThumbsUp />
-                          </Button>
-                        </MessageAction>
-                        <MessageAction tooltip="Downvote" delayDuration={100}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                          >
-                            <ThumbsDown />
-                          </Button>
-                        </MessageAction>
-                      </MessageActions>
-                    </div>
-                  ) : (
-                    <div className="group flex flex-col items-end gap-1">
-                      <MessageContent className="bg-muted text-primary max-w-[85%] rounded-3xl px-5 py-2.5 sm:max-w-[75%]">
-                        {message.content}
-                      </MessageContent>
-                      <MessageActions
-                        className={cn(
-                          "flex gap-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-                        )}
-                      >
-                        <MessageAction tooltip="Edit" delayDuration={100}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                          >
-                            <Pencil />
-                          </Button>
-                        </MessageAction>
-                        <MessageAction tooltip="Delete" delayDuration={100}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                          >
-                            <Trash />
-                          </Button>
-                        </MessageAction>
-                        <MessageAction tooltip="Copy" delayDuration={100}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full"
-                          >
-                            <Copy />
-                          </Button>
-                        </MessageAction>
-                      </MessageActions>
-                    </div>
-                  )}
-                </Message>
-              );
-            })}
+            {/* Render user messages */}
+            {chatMessages.map((message) => (
+              <Message
+                key={message.id}
+                className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-6"
+              >
+                <div className="group flex w-full flex-col items-end gap-1">
+                  <MessageContent className="bg-muted text-primary max-w-[85%] rounded-3xl px-5 py-2.5 whitespace-pre-wrap sm:max-w-[75%]">
+                    {message.content}
+                  </MessageContent>
+                  <MessageActions className="flex gap-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                    <MessageAction tooltip="Copy" delayDuration={100}>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                        <Copy />
+                      </Button>
+                    </MessageAction>
+                  </MessageActions>
+                </div>
+              </Message>
+            ))}
+
+            {/* Render agent response */}
+            {agentResponse && (
+              <div className="animate-fade-in">
+                <AgentMessageComponent response={agentResponse} />
+              </div>
+            )}
+
+            {/* Show loading when waiting for stream */}
+            {isLoading && !agentResponse && <LoadingMessage />}
+            
+            {/* Show error message */}
+            {error && (
+              <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-6">
+                <div className="group flex w-full flex-col items-start gap-0">
+                  <div className="text-primary flex min-w-0 flex-1 flex-row items-center gap-2 rounded-lg border-2 border-red-300 bg-red-300/20 px-2 py-1">
+                    <AlertTriangle size={16} className="text-red-500" />
+                    <p className="text-red-500">{error}</p>
+                  </div>
+                </div>
+              </Message>
+            )}
           </ChatContainerContent>
           <div className="absolute bottom-4 left-1/2 flex w-full max-w-3xl -translate-x-1/2 justify-end px-5">
             <ScrollButton className="shadow-sm" />
@@ -352,73 +607,38 @@ function ChatContent() {
       <div className="bg-background z-10 shrink-0 px-3 pb-3 md:px-5 md:pb-5">
         <div className="mx-auto max-w-3xl">
           <PromptInput
-            isLoading={isLoading}
             value={prompt}
-            onValueChange={setPrompt}
+            onValueChange={handlePromptChange}
+            isLoading={isLoading}
             onSubmit={handleSubmit}
-            className="border-input bg-popover relative z-10 w-full rounded-3xl border p-0 pt-1 shadow-xs"
+            className="w-full border-input bg-popover border rounded-3xl shadow-xs"
           >
-            <div className="flex flex-col">
-              <PromptInputTextarea
-                placeholder="Ask anything"
-                className="min-h-[44px] pt-3 pl-4 text-base leading-[1.3] sm:text-base md:text-base"
-              />
-
-              <PromptInputActions className="mt-5 flex w-full items-center justify-between gap-2 px-3 pb-3">
-                <div className="flex items-center gap-2">
-                  <PromptInputAction tooltip="Add a new action">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-9 rounded-full"
-                    >
-                      <Plus size={18} />
-                    </Button>
-                  </PromptInputAction>
-
-                  <PromptInputAction tooltip="Search">
-                    <Button variant="outline" className="rounded-full">
-                      <Globe size={18} />
-                      Search
-                    </Button>
-                  </PromptInputAction>
-
-                  <PromptInputAction tooltip="More actions">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-9 rounded-full"
-                    >
-                      <MoreHorizontal size={18} />
-                    </Button>
-                  </PromptInputAction>
-                </div>
-                <div className="flex items-center gap-2">
-                  <PromptInputAction tooltip="Voice input">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-9 rounded-full"
-                    >
-                      <Mic size={18} />
-                    </Button>
-                  </PromptInputAction>
-
-                  <Button
-                    size="icon"
-                    disabled={!prompt.trim() || isLoading}
-                    onClick={handleSubmit}
-                    className="size-9 rounded-full"
-                  >
-                    {!isLoading ? (
-                      <ArrowUp size={18} />
-                    ) : (
-                      <span className="size-3 rounded-xs bg-white" />
-                    )}
-                  </Button>
-                </div>
-              </PromptInputActions>
-            </div>
+            <PromptInputTextarea 
+              placeholder="Ask me anything..." 
+              className="min-h-[44px] pt-3 pl-4 text-base leading-[1.3]"
+            />
+            <PromptInputActions className="justify-end pt-2 pr-2 pb-2">
+              <PromptInputAction
+                tooltip={isLoading ? "Stop generation" : "Send message"}
+              >
+                <Button
+                  variant="default"
+                  size="icon"
+                  className="h-8 w-8 rounded-full"
+                  disabled={!prompt.trim() || isLoading}
+                  onClick={() => {
+                    console.log('Button clicked! Prompt:', prompt);
+                    handleSubmit();
+                  }}
+                >
+                  {isLoading ? (
+                    <Square className="size-5 fill-current" />
+                  ) : (
+                    <ArrowUp className="size-5" />
+                  )}
+                </Button>
+              </PromptInputAction>
+            </PromptInputActions>
           </PromptInput>
         </div>
       </div>

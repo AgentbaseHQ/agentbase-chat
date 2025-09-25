@@ -50,6 +50,7 @@ type PromptInputProps = {
   onValueChange?: (value: string) => void
   maxHeight?: number | string
   onSubmit?: () => void
+  disabled?: boolean
   children: React.ReactNode
   className?: string
 }
@@ -58,16 +59,16 @@ function PromptInput({
   className,
   isLoading = false,
   maxHeight = 240,
-  value,
+  value = "",
   onValueChange,
   onSubmit,
+  disabled = false,
   children,
 }: PromptInputProps) {
-  const [internalValue, setInternalValue] = useState(value || "")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleChange = (newValue: string) => {
-    setInternalValue(newValue)
+    console.log('PromptInput handleChange:', newValue)
     onValueChange?.(newValue)
   }
 
@@ -76,10 +77,11 @@ function PromptInput({
       <PromptInputContext.Provider
         value={{
           isLoading,
-          value: value ?? internalValue,
-          setValue: onValueChange ?? handleChange,
+          value: value,
+          setValue: handleChange,
           maxHeight,
           onSubmit,
+          disabled: disabled || isLoading,
           textareaRef,
         }}
       >
@@ -122,7 +124,7 @@ function PromptInputTextarea({
   }, [value, maxHeight, disableAutosize])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !disabled) {
       e.preventDefault()
       onSubmit?.()
     }
@@ -133,7 +135,10 @@ function PromptInputTextarea({
     <Textarea
       ref={textareaRef}
       value={value}
-      onChange={(e) => setValue(e.target.value)}
+      onChange={(e) => {
+        console.log('Textarea onChange:', e.target.value)
+        setValue(e.target.value)
+      }}
       onKeyDown={handleKeyDown}
       className={cn(
         "text-primary min-h-[44px] w-full resize-none border-none bg-transparent shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
@@ -178,7 +183,7 @@ function PromptInputAction({
 
   return (
     <Tooltip {...props}>
-      <TooltipTrigger asChild disabled={disabled} onClick={event => event.stopPropagation()}>
+      <TooltipTrigger asChild disabled={disabled}>
         {children}
       </TooltipTrigger>
       <TooltipContent side={side} className={className}>
