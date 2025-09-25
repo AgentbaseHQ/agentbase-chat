@@ -22,40 +22,49 @@ const rl = readline.createInterface({
 /**
  * Handle different types of responses from the agent
  */
-function handleResponse(response: any) {
-  switch (response.type) {
+interface AgentResponse {
+  type: "agent_started" | "agent_thinking" | "agent_tool_use" | "agent_tool_response" | "agent_response" | "agent_cost";
+  session?: string;
+  content?: string;
+  cost?: number;
+  balance?: number;
+}
+
+function handleResponse(response: unknown) {
+  const resp = response as AgentResponse;
+  switch (resp.type) {
     case "agent_started":
       // Capture session ID from the first response
-      if (!sessionId) {
-        sessionId = response.session;
+      if (!sessionId && resp.session) {
+        sessionId = resp.session;
         console.log(`\n🔗 Session: ${sessionId}\n`);
       }
       break;
 
     case "agent_thinking":
       // Display the agent's thinking message
-      console.log(`\n🧠 Thinking: ${response.content}\n`);
+      console.log(`\n🧠 Thinking: ${resp.content}\n`);
       break;
 
     case "agent_tool_use":
       // Display the agent's tool use message
-      console.log(`\n🔧 Tool Use: ${response.content}\n`);
+      console.log(`\n🔧 Tool Use: ${resp.content}\n`);
       break;
 
     case "agent_tool_response":
       // Display the agent's tool result message (result emoji)
-      console.log(`\n🔧 Tool Result: ${response.content}\n`);
+      console.log(`\n🔧 Tool Result: ${resp.content}\n`);
       break;
 
     case "agent_response":
       // Display the agent's message
-      console.log(`\n🤖 Agent: ${response.content}\n`);
+      console.log(`\n🤖 Agent: ${resp.content}\n`);
       break;
 
     case "agent_cost":
       // Show cost and balance information
       console.log(
-        `💰 Cost: $${response.cost} | Balance: $${response.balance.toFixed(
+        `💰 Cost: $${resp.cost} | Balance: $${resp.balance?.toFixed(
           2
         )}\n`
       );

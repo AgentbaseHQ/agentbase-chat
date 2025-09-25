@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react"
+import { useState } from "react"
 
 interface SourceLinksProps {
   urls: string[]
@@ -24,6 +25,33 @@ function getFaviconUrl(url: string): string {
   }
 }
 
+function SourceLink({ url, index }: { url: string; index: number }) {
+  const [faviconFailed, setFaviconFailed] = useState(false)
+  
+  return (
+    <a
+      key={index}
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs rounded-full transition-colors border border-gray-200"
+    >
+      {!faviconFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={getFaviconUrl(url)}
+          alt=""
+          className="w-3 h-3"
+          onError={() => setFaviconFailed(true)}
+        />
+      ) : (
+        <ExternalLink className="w-3 h-3" />
+      )}
+      <span className="font-medium">{getDomainName(url)}</span>
+    </a>
+  )
+}
+
 export function SourceLinks({ urls }: SourceLinksProps) {
   // Remove duplicates and filter valid URLs
   const uniqueUrls = Array.from(new Set(urls.filter(url => {
@@ -42,29 +70,7 @@ export function SourceLinks({ urls }: SourceLinksProps) {
   return (
     <div className="flex flex-wrap gap-1 mt-3">
       {uniqueUrls.map((url, i) => (
-        <a
-          key={i}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-full transition-colors border border-slate-200"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={getFaviconUrl(url)}
-            alt=""
-            className="w-3 h-3"
-            onError={(e) => {
-              // Fallback to external link icon if favicon fails
-              const target = e.target as HTMLImageElement
-              target.style.display = 'none'
-              const icon = target.nextElementSibling as HTMLElement
-              if (icon) icon.style.display = 'inline'
-            }}
-          />
-          <ExternalLink className="w-3 h-3 hidden" />
-          <span className="font-medium">{getDomainName(url)}</span>
-        </a>
+        <SourceLink key={i} url={url} index={i} />
       ))}
     </div>
   )

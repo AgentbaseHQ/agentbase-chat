@@ -102,26 +102,34 @@ export function ToolUsage({ toolUse }: ToolUsageProps) {
   )
 
   return (
-    <div className="flex flex-wrap gap-1.5 mb-3">
-      {uniqueTools.map((tool, i) => (
-        <div
-          key={i}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200"
-        >
-          {tool.icon}
-          <span className="font-medium">{tool.displayName}</span>
-          {tool.input?.query && (
-            <span className="text-blue-600 opacity-75">
-              • &quot;{tool.input.query.length > 30 ? tool.input.query.substring(0, 30) + '...' : tool.input.query}&quot;
-            </span>
-          )}
-          {tool.input?.command && (
-            <span className="text-blue-600 opacity-75">
-              • {tool.input.command}
-            </span>
-          )}
-        </div>
-      ))}
+    <div className="flex flex-wrap gap-1.5 mb-3 mt-4">
+      {uniqueTools.map((tool, i) => {
+        const isWebSearch = ['web', 'websearch'].includes(tool.name.toLowerCase())
+        const baseClasses = "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border"
+        const colorClasses = isWebSearch 
+          ? "bg-gray-50 text-gray-700 border-gray-200"
+          : "bg-blue-50 text-blue-700 border-blue-200"
+        
+        return (
+          <div
+            key={i}
+            className={`${baseClasses} ${colorClasses}`}
+          >
+            {tool.icon}
+            <span className="font-medium">{tool.displayName}</span>
+            {tool.input?.query && (
+              <span className={isWebSearch ? "text-gray-600 opacity-75" : "text-blue-600 opacity-75"}>
+                • &quot;{tool.input.query.length > 30 ? tool.input.query.substring(0, 30) + '...' : tool.input.query}&quot;
+              </span>
+            )}
+            {tool.input?.command && (
+              <span className={isWebSearch ? "text-gray-600 opacity-75" : "text-blue-600 opacity-75"}>
+                • {tool.input.command}
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
