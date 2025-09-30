@@ -173,14 +173,14 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
     <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
       {/* Session info */}
       {sessionInfo && (
-        <div className="text-xs text-muted-foreground mb-1">
+        <div className="text-xs text-muted-foreground mb-2">
           🔗 Session: {sessionInfo}
         </div>
       )}
       
       {/* Thinking process */}
       {thinking.length > 0 && (
-        <div className="text-sm text-muted-foreground mb-4">
+        <div className="text-sm text-muted-foreground mb-6">
           🧠 {thinking.join(" → ")}
           {!response.isComplete && "..."}
         </div>
@@ -206,14 +206,14 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
       
       {/* Cost info */}
       {costInfo && (
-        <div className="text-xs text-muted-foreground mt-4">
+        <div className="text-xs text-muted-foreground mt-6">
           💰 Cost: ${typeof costInfo.cost === 'number' ? costInfo.cost.toFixed(4) : costInfo.cost} | Balance: ${typeof costInfo.balance === 'number' ? costInfo.balance.toFixed(2) : costInfo.balance}
         </div>
       )}
       
       {/* Error */}
       {error && (
-        <div className="text-sm text-red-600 mt-4">
+        <div className="text-sm text-red-600 mt-6">
           ⚠️ {error}
         </div>
       )}
@@ -331,7 +331,7 @@ function ChatContent() {
 
     try {
       // Simple fetch to our API route
-      const response = await fetch('/api/agentbase', {
+      const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -399,7 +399,7 @@ function ChatContent() {
 
       <div ref={chatContainerRef} className="relative flex-1 overflow-y-auto">
         <ChatContainerRoot className="h-full">
-          <ChatContainerContent className="space-y-4 px-5 py-12">
+          <ChatContainerContent className="space-y-8 px-5 py-12">
             {/* Show initial prompt if no messages */}
             {chatMessages.length === 0 && completedResponses.length === 0 && !currentAgentResponse && (
               <div className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 md:px-5 md:pb-5">
@@ -422,7 +422,7 @@ function ChatContent() {
                   key={message.id}
                   className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-6"
                 >
-                  <div className="group flex w-full flex-col items-end gap-1">
+                  <div className="group flex w-full flex-col items-end gap-2">
                     <MessageContent className="bg-muted text-primary max-w-[85%] rounded-3xl px-5 py-2.5 whitespace-pre-wrap sm:max-w-[75%]">
                       {message.content}
                     </MessageContent>

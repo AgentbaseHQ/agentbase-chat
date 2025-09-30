@@ -12,7 +12,7 @@ import Agentbase from 'agentbase-sdk'
 
 // Create agentbase client
 function createAgentbaseClient() {
-  const apiKey = process.env.NEXT_PUBLIC_AGENTBASE_API_KEY || process.env.AGENTBASE_API_KEY
+  const apiKey = process.env.AGENTBASE_API_KEY
   
   if (!apiKey) {
     throw new Error('AGENTBASE_API_KEY not found in environment variables')
