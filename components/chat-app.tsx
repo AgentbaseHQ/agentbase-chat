@@ -44,7 +44,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-// import { cn } from "@/lib/utils";
 import {
   ArrowUp,
   Copy,
@@ -142,10 +141,6 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
     .map(m => m.content)
     .join('\n')
   
-  // Debug: Log what we're filtering and what remains
-  console.log('All messages:', response.messages.map(m => ({ type: m.type, content: m.content?.substring(0, 50) })))
-  console.log('Filtered messages:', filteredMessages.map(m => ({ type: m.type, content: m.content?.substring(0, 50) })))
-  console.log('Final content:', content)
   
   const costInfo = filteredMessages.find(m => m.type === 'agent_cost')
   const error = filteredMessages.find(m => m.type === 'error')?.content
