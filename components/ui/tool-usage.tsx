@@ -104,7 +104,6 @@ export function ToolUsage({ toolUse }: ToolUsageProps) {
   return (
     <div className="flex flex-wrap gap-2 mb-8 mt-6">
       {uniqueTools.map((tool, i) => {
-        const isWebSearch = ['web', 'websearch'].includes(tool.name.toLowerCase())
         const baseClasses = "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-full border border-foreground/20 bg-transparent"
         const colorClasses = "text-foreground"
         

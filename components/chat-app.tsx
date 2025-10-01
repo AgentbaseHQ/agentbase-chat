@@ -124,14 +124,31 @@ interface AgentResponse {
 
 // Simplified agent message component using SDK responses directly
 const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
-  // Extract different message types from SDK responses
-  const sessionInfo = response.messages.find(m => m.type === 'agent_started')?.session
-  const thinking = response.messages.filter(m => m.type === 'agent_thinking').map(m => m.content)
-  const toolUse = response.messages.filter(m => m.type === 'agent_tool_use')
-  const toolResults = response.messages.filter(m => m.type === 'agent_tool_response')
-  const content = response.messages.filter(m => m.type === 'agent_response').map(m => m.content).join('\n')
-  const costInfo = response.messages.find(m => m.type === 'agent_cost')
-  const error = response.messages.find(m => m.type === 'error')?.content
+  // Filter out ALL thinking and planning events, only show final responses
+  const filteredMessages = response.messages.filter(m => 
+    m.type !== 'agent_thinking' && 
+    m.type !== 'agent_thinking_start' &&
+    m.type !== 'agent_response_start' &&
+    m.type !== 'agent_tool_use_start' &&
+    m.type !== 'agent_started' &&
+    m.type !== 'agent_step' &&
+    m.type !== 'agent_completed'
+  )
+  
+  const toolUse = filteredMessages.filter(m => m.type === 'agent_tool_use')
+  const toolResults = filteredMessages.filter(m => m.type === 'agent_tool_response')
+  const content = filteredMessages
+    .filter(m => m.type === 'agent_response')
+    .map(m => m.content)
+    .join('\n')
+  
+  // Debug: Log what we're filtering and what remains
+  console.log('All messages:', response.messages.map(m => ({ type: m.type, content: m.content?.substring(0, 50) })))
+  console.log('Filtered messages:', filteredMessages.map(m => ({ type: m.type, content: m.content?.substring(0, 50) })))
+  console.log('Final content:', content)
+  
+  const costInfo = filteredMessages.find(m => m.type === 'agent_cost')
+  const error = filteredMessages.find(m => m.type === 'error')?.content
 
   // Extract source URLs from tool responses
   const extractSourceUrls = (): string[] => {
@@ -171,21 +188,6 @@ const AgentMessageComponent = ({ response }: { response: AgentResponse }) => {
 
   return (
     <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-1 px-6">
-      {/* Session info */}
-      {sessionInfo && (
-        <div className="text-xs text-muted-foreground mb-2">
-          🔗 Session: {sessionInfo}
-        </div>
-      )}
-      
-      {/* Thinking process */}
-      {thinking.length > 0 && (
-        <div className="text-sm text-muted-foreground mb-6">
-          🧠 {thinking.join(" → ")}
-          {!response.isComplete && "..."}
-        </div>
-      )}
-      
       {/* Tool usage */}
       <ToolUsage toolUse={toolUse} />
       
@@ -236,7 +238,7 @@ const LoadingMessage = () => (
       
       {/* Optional: Show what the agent might be doing */}
       <div className="text-xs text-muted-foreground/70">
-        Analyzing your question and searching for information
+        Analyzing your prompt and acting...
       </div>
     </div>
   </Message>
@@ -342,12 +344,26 @@ function ChatContent() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If we can't parse JSON, response is likely HTML error page
+          const text = await response.text();
+          errorMessage = `Server error (${response.status}): ${text.substring(0, 100)}...`;
+        }
+        throw new Error(errorMessage);
       }
 
       // Get complete response from SDK (no streaming)
-      const sdkResponses = await response.json();
+      let sdkResponses;
+      try {
+        sdkResponses = await response.json();
+      } catch {
+        const text = await response.text();
+        throw new Error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);
+      }
       
       // Extract session ID from the first agent_started response
       const sessionResponse = sdkResponses.find((r: SDKResponse) => r.type === 'agent_started');
@@ -381,20 +397,6 @@ function ChatContent() {
     <main className="flex h-screen flex-col overflow-hidden">
       <header className="bg-background z-10 flex h-16 w-full shrink-0 items-center gap-3 border-b px-4">
         <SidebarTrigger className="-ml-1" />
-        <a 
-          href="https://agentbase.sh" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img 
-            src="https://www.agentbase.sh/logos/agentbase.svg" 
-            alt="Agentbase" 
-            className="w-6 h-6" 
-          />
-          <div className="text-foreground font-medium">Agentbase</div>
-        </a>
       </header>
 
       <div ref={chatContainerRef} className="relative flex-1 overflow-y-auto">
